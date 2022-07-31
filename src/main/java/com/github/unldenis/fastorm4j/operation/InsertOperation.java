@@ -48,7 +48,13 @@ public record InsertOperation(
                 if (Modifier.isStatic(m.getModifiers()))
                     continue;
 
-                fields.add(field.getName());
+                // check if field has custom name
+                if(field.isAnnotationPresent(Column.class)) {
+                    var columnName = field.getAnnotation(Column.class).name();
+                    fields.add(columnName.isEmpty() ? field.getName() : columnName);
+                } else {
+                    fields.add(field.getName());
+                }
 
                 var type = field.getType();
                 if (Integer.class.equals(type) || int.class.equals(type)) {
