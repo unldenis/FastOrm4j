@@ -1,22 +1,16 @@
 package com.github.unldenis.fastorm4j;
 
-import com.github.unldenis.fastorm4j.result.*;
 
 import java.lang.reflect.*;
 import java.sql.*;
 import java.util.*;
 import java.util.stream.*;
 
-import static com.github.unldenis.fastorm4j.result.FResult.err;
-import static com.github.unldenis.fastorm4j.result.FResult.ok;
 
 public record FTable(FConnection connection, String creationSql, String name, List<Column> columns) {
 
-    public FAbstractResult<SQLException> openTable() {
-        var res = connection.createStatement();
-        if(res.isErr()) return res;
-
-        FStatement stmt = res.unwrap();
+    public boolean openTable() throws SQLException {
+        var stmt = connection.createStatement();
         return stmt.execute(creationSql);
     }
 
@@ -31,7 +25,7 @@ public record FTable(FConnection connection, String creationSql, String name, Li
         return new Builder();
     }
 
-    public static FResult<Builder, IllegalArgumentException> builder(String tableName, Class<?> cl) {
+    public static Builder builder(String tableName, Class<?> cl) {
         var builder = builder();
         builder.name(tableName);
 
@@ -63,28 +57,11 @@ public record FTable(FConnection connection, String creationSql, String name, Li
                     if(field.isAnnotationPresent(com.github.unldenis.fastorm4j.ann.Column.class)) {
                         var column = field.getAnnotation(com.github.unldenis.fastorm4j.ann.Column.class);
                         name = column.name().isEmpty() ? field.getName() : column.name();
-                        if(column.type().isEmpty()) {
-
-                            // Check any errors with sql type
-                            var res = getSQlTypeFromClass(field.getType());
-                            if(res.isErr())
-                                return err(res.unwrapErr());
-                            type = res.unwrap();
-
-                        } else {
-                            type = column.type();
-                        }
-
+                        type = column.type().isEmpty() ? getSQlTypeFromClass(field.getType()) : column.type();
                         required = column.required();
                     } else {
                         name = field.getName();
-
-                        // Check any errors with sql type
-                        var res = getSQlTypeFromClass(field.getType());
-                        if(res.isErr())
-                            return err(res.unwrapErr());
-                        type = res.unwrap();
-
+                        type = getSQlTypeFromClass(field.getType());
                         required = false;
                     }
 
@@ -95,18 +72,18 @@ public record FTable(FConnection connection, String creationSql, String name, Li
             }
         }
 
-        return ok(builder);
+        return builder;
     }
 
-    private static FResult<String, IllegalArgumentException> getSQlTypeFromClass(Class<?> type) {
+    private static String getSQlTypeFromClass(Class<?> type) {
         if (Integer.class.equals(type) || int.class.equals(type)) {
-            return ok("INTEGER");
+            return "INTEGER";
         } else if (String.class.equals(type)) {
-            return ok("TEXT");
+            return "TEXT";
         } else if (Long.class.equals(type) || long.class.equals(type)) {
-            return ok("INTEGER");
+            return "INTEGER";
         }
-        return err( new IllegalArgumentException("Invalid SQLType from " + type.getName()));
+        throw new IllegalArgumentException("Invalid SQLType from " + type.getName());
     }
 
     public static class Builder {
@@ -129,11 +106,11 @@ public record FTable(FConnection connection, String creationSql, String name, Li
             return this;
         }
 
-        public FResult<FTable, IllegalArgumentException> build(FConnection connection) {
+        public FTable build(FConnection connection) {
             if(name == null)
-                return err(new IllegalArgumentException("Name not set"));
+                throw new IllegalArgumentException("Name not set");
             if(columns.isEmpty())
-                return err(new IllegalArgumentException("Columns are empty"));
+                 throw new IllegalArgumentException("Columns are empty");
 
             String types = columns
                     .stream()
@@ -145,7 +122,7 @@ public record FTable(FConnection connection, String creationSql, String name, Li
                     CREATE TABLE IF NOT EXISTS %s (%s);
                     """.formatted(name, types);
 
-            return ok(new FTable(connection, sql, name, columns));
+            return new FTable(connection, sql, name, columns);
         }
     }
 }

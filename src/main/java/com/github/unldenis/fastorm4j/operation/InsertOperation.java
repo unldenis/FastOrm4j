@@ -8,6 +8,7 @@ import java.util.*;
 public record InsertOperation(
         String _tableName,
 
+        Class<?> _methodReturnType,
         String _methodName,
         String _paramObjectName,
         Class<?> _param
@@ -16,6 +17,7 @@ public record InsertOperation(
     public InsertOperation(Method method) {
         this(
                 method.getAnnotation(Operation.class).table(),
+                method.getReturnType(),
                 method.getName(),
                 method.getParameters()[0].getName(),
                 method.getParameters()[0].getType()
@@ -25,7 +27,7 @@ public record InsertOperation(
     public String parse() {
         StringJoiner fields = new StringJoiner(", ");
         StringJoiner setStatements = new StringJoiner("\n");
-        setStatements.add("FPreparedStatement stmt = connection().prepareStatement(insertSQL).unwrap();");
+        setStatements.add("PreparedStatement stmt = connection().prepareStatement(insertSQL);");
 
 
         int index = 1;
@@ -50,11 +52,11 @@ public record InsertOperation(
 
                 var type = field.getType();
                 if (Integer.class.equals(type) || int.class.equals(type)) {
-                    setStatements.add("        stmt.setInt(%d, %s.%s()).unwrap();".formatted(index++, _paramObjectName, nameMethod));
+                    setStatements.add("        stmt.setInt(%d, %s.%s());".formatted(index++, _paramObjectName, nameMethod));
                 } else if (String.class.equals(type)) {
-                    setStatements.add("        stmt.setString(%d, %s.%s()).unwrap();".formatted(index++, _paramObjectName, nameMethod));
+                    setStatements.add("        stmt.setString(%d, %s.%s());".formatted(index++, _paramObjectName, nameMethod));
                 } else if (Long.class.equals(type) || long.class.equals(type)) {
-                    setStatements.add("        stmt.setLong(%d, %s.%s()).unwrap();".formatted(index++, _paramObjectName, nameMethod));
+                    setStatements.add("        stmt.setLong(%d, %s.%s());".formatted(index++, _paramObjectName, nameMethod));
                 }
             } catch (NoSuchMethodException ignored) {
             }
@@ -68,13 +70,26 @@ public record InsertOperation(
                 String insertSQL = "INSERT INTO %s (%s) VALUES (%s)";""".formatted(_tableName, fieldsStr, anonFieldsStr);
 
 
-        return """
-                @Override
-                    public FIntResult<SQLException> %s(%s %s) {
+        if (_methodReturnType.equals(Void.TYPE)) {
+            return """
+                    @Override
+                    public void %s(%s %s) throws SQLException {
+                        %s
+                        %s
+                        stmt.executeUpdate();
+                    }
+                """.formatted(_methodName, _param.getName(), _paramObjectName, insertSQL, setStatements.toString());
+        } else {
+            return """
+                    @Override
+                    public int %s(%s %s) throws SQLException {
                         %s
                         %s
                         return stmt.executeUpdate();
                     }
                 """.formatted(_methodName, _param.getName(), _paramObjectName, insertSQL, setStatements.toString());
+        }
+
+
     }
 }

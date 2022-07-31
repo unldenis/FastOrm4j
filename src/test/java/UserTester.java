@@ -1,29 +1,30 @@
 import com.github.unldenis.fastorm4j.*;
 import com.github.unldenis.fastorm4j.ann.*;
 import com.github.unldenis.fastorm4j.operation.*;
-import com.github.unldenis.fastorm4j.result.*;
 
+import java.lang.reflect.*;
 import java.sql.*;
 
 public abstract class UserTester implements FListener {
 
-    public static void main(String[] args) {
-        var listener = FListener.Factory.newInstance(UserTester.class).unwrap();
-        int code = listener.insertUser(new Person("admin", 19)).unwrap();
+
+    public static void main(String[] args) throws ClassNotFoundException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        var impl = FListener.compile(UserTester.class, "users", new Person("admin0", 19));
+
     }
 
     private final FConnection conn;
 
-    public UserTester() {
+    public UserTester(String tableName, Person person) throws SQLException, ClassNotFoundException {
         conn = new FConnection("org.sqlite.JDBC", "jdbc:sqlite:sample.db");
-        conn.open().expect("Connection not open");
+        conn.open();
 
-        FTable.builder("userTable3", Person.class)
-            .unwrap()
-            .build(conn)
-            .unwrap()
-            .openTable()
-            .err().ifPresent(Throwable::printStackTrace);
+        if(FTable.builder(tableName, Person.class)
+                .build(conn)
+                .openTable()) {
+            System.out.println("Table %s opened".formatted(tableName));
+        }
+        insertUser(person);
     }
 
     @Override
@@ -31,6 +32,11 @@ public abstract class UserTester implements FListener {
         return conn;
     }
 
-    @Operation(table = "userTable2", type = OperationType.INSERT)
-    public abstract FIntResult<SQLException> insertUser(Person person);
+    @Operation(table = "users", type = OperationType.INSERT)
+    public abstract int insertUser(Person person) throws SQLException;
+
+    @Operation(table = "users", type = OperationType.INSERT)
+    public void insertVariant(Person person) throws SQLException {
+
+    }
 }
