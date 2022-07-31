@@ -20,7 +20,7 @@ public abstract class UserTester implements FListener {
 
     public static void main(String[] args) {
         var listener = FListener.Factory.newInstance(UserTester.class).unwrap();
-        listener.insertUser(new Person("admin", 19));
+        int code = listener.insertUser(new Person("admin", 19)).unwrap();
     }
 
     private final FConnection conn;
